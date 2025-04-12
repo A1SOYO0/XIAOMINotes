@@ -47,6 +47,10 @@
         android:title="@string/menu_alert" />
 
     <item
+        android:id="@+id/menu_insert_image"
+        android:title="@string/menu_insert_image" />
+
+    <item
         android:id="@+id/menu_delete_remind"
         android:title="@string/menu_remove_remind" />
 </menu>

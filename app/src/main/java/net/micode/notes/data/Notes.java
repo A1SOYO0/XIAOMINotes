@@ -49,6 +49,7 @@ public class Notes {
     public static class DataConstants {
         public static final String NOTE = TextNote.CONTENT_ITEM_TYPE;
         public static final String CALL_NOTE = CallNote.CONTENT_ITEM_TYPE;
+        public static final String IMAGE_NOTE = ImageNote.CONTENT_ITEM_TYPE;
     }
 
     /**
@@ -275,5 +276,25 @@ public class Notes {
         public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/call_note";
 
         public static final Uri CONTENT_URI = Uri.parse("content://" + AUTHORITY + "/call_note");
+    }
+
+    public static final class ImageNote implements DataColumns {
+        /**
+         * Image path in the storage
+         * <P> Type: TEXT </P>
+         */
+        public static final String IMAGE_PATH = DATA3;
+        
+        /**
+         * Image description
+         * <P> Type: TEXT </P>
+         */
+        public static final String IMAGE_DESCRIPTION = DATA4;
+        
+        public static final String CONTENT_TYPE = "vnd.android.cursor.dir/image_note";
+        
+        public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/image_note";
+        
+        public static final Uri CONTENT_URI = Uri.parse("content://" + AUTHORITY + "/image_note");
     }
 }

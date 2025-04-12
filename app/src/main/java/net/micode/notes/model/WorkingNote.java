@@ -41,6 +41,8 @@ public class WorkingNote {
     private String mContent;
     // Note mode
     private int mMode;
+    // Note image path
+    private String mImagePath;
 
     private long mAlertDate;
 
@@ -162,6 +164,9 @@ public class WorkingNote {
                         mNote.setTextDataId(cursor.getLong(DATA_ID_COLUMN));
                     } else if (DataConstants.CALL_NOTE.equals(type)) {
                         mNote.setCallDataId(cursor.getLong(DATA_ID_COLUMN));
+                    } else if (DataConstants.IMAGE_NOTE.equals(type)) {
+                        mImagePath = cursor.getString(DATA_CONTENT_COLUMN);
+                        mNote.setImageDataId(cursor.getLong(DATA_ID_COLUMN));
                     } else {
                         Log.d(TAG, "Wrong note type with type:" + type);
                     }
@@ -282,10 +287,23 @@ public class WorkingNote {
     }
 
     public void setWorkingText(String text) {
-        if (!TextUtils.equals(mContent, text)) {
-            mContent = text;
-            mNote.setTextData(DataColumns.CONTENT, mContent);
+        if (mNoteId == 0) {
+            Log.e(TAG, "The note is not initialized properly");
+            return;
         }
+        mContent = text;
+        mNote.setTextData(DataColumns.CONTENT, text);
+    }
+
+    public void setWorkingImage(String imagePath) {
+        if (mNoteId == 0) {
+            Log.e(TAG, "The note is not initialized properly");
+            return;
+        }
+        mImagePath = imagePath;
+        mNote.setImageData(DataColumns.CONTENT, imagePath);
+        // 设置笔记有附件
+        mNote.setNoteValue(NoteColumns.HAS_ATTACHMENT, String.valueOf(1));
     }
 
     public void convertToCallNote(String phoneNumber, long callDate) {
@@ -300,6 +318,14 @@ public class WorkingNote {
 
     public String getContent() {
         return mContent;
+    }
+
+    public String getImagePath() {
+        return mImagePath;
+    }
+
+    public boolean hasImage() {
+        return mImagePath != null && !mImagePath.isEmpty();
     }
 
     public long getAlertDate() {
