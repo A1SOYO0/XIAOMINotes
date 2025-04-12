@@ -87,25 +87,47 @@
                     android:layout_width="fill_parent"
                     android:layout_height="fill_parent">
 
-                    <net.micode.notes.ui.NoteEditText
-                        android:id="@+id/note_edit_view"
-                        android:layout_width="fill_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="left|top"
-                        android:background="@null"
-                        android:autoLink="all"
-                        android:linksClickable="false"
-                        android:minLines="12"
-                        android:textAppearance="@style/TextAppearancePrimaryItem"
-                        android:lineSpacingMultiplier="1.2" />
-
                     <LinearLayout
-                        android:id="@+id/note_edit_list"
                         android:layout_width="fill_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:layout_marginLeft="-10dip"
-                        android:visibility="gone" />
+                        android:layout_height="fill_parent"
+                        android:orientation="vertical">
+
+                        <net.micode.notes.ui.NoteEditText
+                            android:id="@+id/note_edit_view"
+                            android:layout_width="fill_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="left|top"
+                            android:background="@null"
+                            android:autoLink="all"
+                            android:linksClickable="false"
+                            android:minLines="12"
+                            android:textAppearance="@style/TextAppearancePrimaryItem"
+                            android:lineSpacingMultiplier="1.2" />
+
+                        <ImageView
+                            android:id="@+id/note_image"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:adjustViewBounds="true"
+                            android:maxHeight="300dp"
+                            android:scaleType="fitCenter"
+                            android:visibility="gone"
+                            android:layout_marginTop="16dp"
+                            android:layout_marginBottom="16dp"
+                            android:layout_marginLeft="8dp"
+                            android:layout_marginRight="8dp"
+                            android:background="#33000000"
+                            android:padding="1dp"
+                            android:contentDescription="@string/app_name" />
+
+                        <LinearLayout
+                            android:id="@+id/note_edit_list"
+                            android:layout_width="fill_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:layout_marginLeft="-10dip"
+                            android:visibility="gone" />
+                    </LinearLayout>
                 </LinearLayout>
             </ScrollView>
 

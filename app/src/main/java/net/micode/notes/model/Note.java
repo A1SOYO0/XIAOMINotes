@@ -96,6 +96,18 @@ public class Note {
         mNoteData.setCallData(key, value);
     }
 
+    public void setImageDataId(long id) {
+        mNoteData.setImageDataId(id);
+    }
+
+    public long getImageDataId() {
+        return mNoteData.mImageDataId;
+    }
+
+    public void setImageData(String key, String value) {
+        mNoteData.setImageData(key, value);
+    }
+
     public boolean isLocalModified() {
         return mNoteDiffValues.size() > 0 || mNoteData.isLocalModified();
     }
@@ -138,18 +150,24 @@ public class Note {
         private long mCallDataId;
 
         private ContentValues mCallDataValues;
+        
+        private long mImageDataId;
+        
+        private ContentValues mImageDataValues;
 
         private static final String TAG = "NoteData";
 
         public NoteData() {
             mTextDataValues = new ContentValues();
             mCallDataValues = new ContentValues();
+            mImageDataValues = new ContentValues();
             mTextDataId = 0;
             mCallDataId = 0;
+            mImageDataId = 0;
         }
 
         boolean isLocalModified() {
-            return mTextDataValues.size() > 0 || mCallDataValues.size() > 0;
+            return mTextDataValues.size() > 0 || mCallDataValues.size() > 0 || mImageDataValues.size() > 0;
         }
 
         void setTextDataId(long id) {
@@ -177,6 +195,19 @@ public class Note {
             mNoteDiffValues.put(NoteColumns.LOCAL_MODIFIED, 1);
             mNoteDiffValues.put(NoteColumns.MODIFIED_DATE, System.currentTimeMillis());
         }
+        
+        void setImageDataId(long id) {
+            if (id <= 0) {
+                throw new IllegalArgumentException("Image data id should larger than 0");
+            }
+            mImageDataId = id;
+        }
+        
+        void setImageData(String key, String value) {
+            mImageDataValues.put(key, value);
+            mNoteDiffValues.put(NoteColumns.LOCAL_MODIFIED, 1);
+            mNoteDiffValues.put(NoteColumns.MODIFIED_DATE, System.currentTimeMillis());
+        }
 
         Uri pushIntoContentResolver(Context context, long noteId) {
             /**
@@ -198,15 +229,16 @@ public class Note {
                     try {
                         setTextDataId(Long.valueOf(uri.getPathSegments().get(1)));
                     } catch (NumberFormatException e) {
-                        Log.e(TAG, "Insert new text data fail with noteId" + noteId);
-                        mTextDataValues.clear();
+                        Log.e(TAG, "Get note text data id error :" + e.toString());
                         return null;
                     }
                 } else {
-                    builder = ContentProviderOperation.newUpdate(ContentUris.withAppendedId(
-                            Notes.CONTENT_DATA_URI, mTextDataId));
-                    builder.withValues(mTextDataValues);
-                    operationList.add(builder.build());
+                    if (context.getContentResolver().update(
+                            ContentUris.withAppendedId(Notes.CONTENT_DATA_URI, mTextDataId),
+                            mTextDataValues, null, null) == 0) {
+                        Log.e(TAG, "Update text data error, should not happen");
+                        return null;
+                    }
                 }
                 mTextDataValues.clear();
             }
@@ -220,17 +252,41 @@ public class Note {
                     try {
                         setCallDataId(Long.valueOf(uri.getPathSegments().get(1)));
                     } catch (NumberFormatException e) {
-                        Log.e(TAG, "Insert new call data fail with noteId" + noteId);
-                        mCallDataValues.clear();
+                        Log.e(TAG, "Get note call data id error :" + e.toString());
                         return null;
                     }
                 } else {
-                    builder = ContentProviderOperation.newUpdate(ContentUris.withAppendedId(
-                            Notes.CONTENT_DATA_URI, mCallDataId));
-                    builder.withValues(mCallDataValues);
-                    operationList.add(builder.build());
+                    if (context.getContentResolver().update(
+                            ContentUris.withAppendedId(Notes.CONTENT_DATA_URI, mCallDataId),
+                            mCallDataValues, null, null) == 0) {
+                        Log.e(TAG, "Update call data error, should not happen");
+                        return null;
+                    }
                 }
                 mCallDataValues.clear();
+            }
+            
+            if(mImageDataValues.size() > 0) {
+                mImageDataValues.put(DataColumns.NOTE_ID, noteId);
+                if (mImageDataId == 0) {
+                    mImageDataValues.put(DataColumns.MIME_TYPE, Notes.DataConstants.IMAGE_NOTE);
+                    Uri uri = context.getContentResolver().insert(Notes.CONTENT_DATA_URI,
+                            mImageDataValues);
+                    try {
+                        setImageDataId(Long.valueOf(uri.getPathSegments().get(1)));
+                    } catch (NumberFormatException e) {
+                        Log.e(TAG, "Get note image data id error :" + e.toString());
+                        return null;
+                    }
+                } else {
+                    if (context.getContentResolver().update(
+                            ContentUris.withAppendedId(Notes.CONTENT_DATA_URI, mImageDataId),
+                            mImageDataValues, null, null) == 0) {
+                        Log.e(TAG, "Update image data error, should not happen");
+                        return null;
+                    }
+                }
+                mImageDataValues.clear();
             }
 
             if (operationList.size() > 0) {
@@ -247,7 +303,7 @@ public class Note {
                     return null;
                 }
             }
-            return null;
+            return ContentUris.withAppendedId(Notes.CONTENT_NOTE_URI, noteId);
         }
     }
 }

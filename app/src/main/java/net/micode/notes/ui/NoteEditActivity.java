@@ -27,9 +27,17 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Paint;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.preference.PreferenceManager;
+import android.provider.MediaStore;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.TextUtils;
@@ -65,12 +73,17 @@ import net.micode.notes.ui.NoteEditText.OnTextViewChangeListener;
 import net.micode.notes.widget.NoteWidgetProvider_2x;
 import net.micode.notes.widget.NoteWidgetProvider_4x;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import android.Manifest;
+import android.provider.DocumentsContract;
 
 public class NoteEditActivity extends Activity implements OnClickListener,
         NoteSettingChangedListener, OnTextViewChangeListener {
@@ -129,6 +142,8 @@ public class NoteEditActivity extends Activity implements OnClickListener,
     private View mFontSizeSelector;
 
     private EditText mNoteEditor;
+    
+    private ImageView mNoteImage;
 
     private View mNoteEditorPanel;
 
@@ -148,6 +163,9 @@ public class NoteEditActivity extends Activity implements OnClickListener,
 
     private String mUserQuery;
     private Pattern mPattern;
+
+    private static final int REQUEST_CODE_IMAGE = 1;
+    private static final int REQUEST_CODE_PERMISSION = 2;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -374,12 +392,15 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         mNoteEditor = (EditText) findViewById(R.id.note_edit_view);
         mNoteEditorPanel = findViewById(R.id.sv_note_edit);
         mNoteBgColorSelector = findViewById(R.id.note_bg_color_selector);
+        mFontSizeSelector = findViewById(R.id.font_size_selector);
+        
+        mNoteImage = (ImageView) findViewById(R.id.note_image);
+
         for (int id : sBgSelectorBtnsMap.keySet()) {
             ImageView iv = (ImageView) findViewById(id);
             iv.setOnClickListener(this);
         }
 
-        mFontSizeSelector = findViewById(R.id.font_size_selector);
         for (int id : sFontSizeBtnsMap.keySet()) {
             View view = findViewById(id);
             view.setOnClickListener(this);
@@ -395,6 +416,25 @@ public class NoteEditActivity extends Activity implements OnClickListener,
             mFontSizeId = ResourceParser.BG_DEFAULT_FONT_SIZE;
         }
         mEditTextList = (LinearLayout) findViewById(R.id.note_edit_list);
+
+        /**
+         * HACKME: Fix bug of store the "Format" setting for a note
+         */
+        mWorkingNote.setOnSettingStatusChangedListener(this);
+        
+        if (mWorkingNote.hasImage()) {
+            showImage(mWorkingNote.getImagePath());
+        }
+
+        mNoteBgColorSelector.setVisibility(View.GONE);
+        mFontSizeSelector.setVisibility(View.GONE);
+
+        if (mWorkingNote.getCheckListMode() == TextNote.MODE_CHECK_LIST) {
+            switchToListMode(mWorkingNote.getContent());
+        } else {
+            mNoteEditor.setText(getHighlightQueryResult(mWorkingNote.getContent(), mUserQuery));
+            mNoteEditor.setSelection(mNoteEditor.getText().length());
+        }
     }
 
     @Override
@@ -430,7 +470,7 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         if (id == R.id.btn_set_bg_color) {
             mNoteBgColorSelector.setVisibility(View.VISIBLE);
             findViewById(sBgSelectorSelectionMap.get(mWorkingNote.getBgColorId())).setVisibility(
-                    -                    View.VISIBLE);
+                    View.VISIBLE);
         } else if (sBgSelectorBtnsMap.containsKey(id)) {
             findViewById(sBgSelectorSelectionMap.get(mWorkingNote.getBgColorId())).setVisibility(
                     View.GONE);
@@ -512,27 +552,13 @@ public class NoteEditActivity extends Activity implements OnClickListener,
                 createNewNote();
                 break;
             case R.id.menu_delete:
-                AlertDialog.Builder builder = new AlertDialog.Builder(this);
-                builder.setTitle(getString(R.string.alert_title_delete));
-                builder.setIcon(android.R.drawable.ic_dialog_alert);
-                builder.setMessage(getString(R.string.alert_message_delete_note));
-                builder.setPositiveButton(android.R.string.ok,
-                        new DialogInterface.OnClickListener() {
-                            public void onClick(DialogInterface dialog, int which) {
-                                deleteCurrentNote();
-                                finish();
-                            }
-                        });
-                builder.setNegativeButton(android.R.string.cancel, null);
-                builder.show();
+                deleteCurrentNote();
                 break;
             case R.id.menu_font_size:
-                mFontSizeSelector.setVisibility(View.VISIBLE);
-                findViewById(sFontSelectorSelectionMap.get(mFontSizeId)).setVisibility(View.VISIBLE);
+                showFontSizeSelectionMenu();
                 break;
             case R.id.menu_list_mode:
-                mWorkingNote.setCheckListMode(mWorkingNote.getCheckListMode() == 0 ?
-                        TextNote.MODE_CHECK_LIST : 0);
+                switchModeBetweenTextAndList();
                 break;
             case R.id.menu_share:
                 getWorkingText();
@@ -543,6 +569,9 @@ public class NoteEditActivity extends Activity implements OnClickListener,
                 break;
             case R.id.menu_alert:
                 setReminder();
+                break;
+            case R.id.menu_insert_image:
+                insertImage();
                 break;
             case R.id.menu_delete_remind:
                 mWorkingNote.setAlertDate(0, false);
@@ -869,5 +898,222 @@ public class NoteEditActivity extends Activity implements OnClickListener,
 
     private void showToast(int resId, int duration) {
         Toast.makeText(this, resId, duration).show();
+    }
+
+    private void showFontSizeSelectionMenu() {
+        mFontSizeSelector.setVisibility(View.VISIBLE);
+        findViewById(sFontSelectorSelectionMap.get(mFontSizeId)).setVisibility(View.VISIBLE);
+    }
+
+    private void switchModeBetweenTextAndList() {
+        mWorkingNote.setCheckListMode(mWorkingNote.getCheckListMode() == 0 ?
+                TextNote.MODE_CHECK_LIST : 0);
+    }
+
+    private void insertImage() {
+        // 直接请求权限，不进行检查，避免虚拟机上可能存在的权限状态异常
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            requestPermissions(new String[]{
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            }, REQUEST_CODE_PERMISSION);
+        } else {
+            // 低于Android 6.0版本不需要动态申请权限
+            showImagePickerDialog();
+        }
+    }
+    
+    private void showImagePickerDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(R.string.menu_insert_image);
+        String[] items = new String[]{"从图库选择", "浏览文件"};
+        builder.setItems(items, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                if (which == 0) {
+                    // 从图库选择
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                        startActivityForResult(intent, REQUEST_CODE_IMAGE);
+                    } catch (Exception e) {
+                        // 如果上面的方法不起作用，尝试使用ACTION_GET_CONTENT
+                        Toast.makeText(NoteEditActivity.this, "尝试其他选择方式", Toast.LENGTH_SHORT).show();
+                        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                        intent.setType("image/*");
+                        startActivityForResult(intent, REQUEST_CODE_IMAGE);
+                    }
+                } else {
+                    // 浏览文件选择
+                    try {
+                        Intent intent;
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                            // 使用新的API
+                            intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                            intent.addCategory(Intent.CATEGORY_OPENABLE);
+                        } else {
+                            // 旧API备用
+                            intent = new Intent(Intent.ACTION_GET_CONTENT);
+                        }
+                        intent.setType("image/*");
+                        startActivityForResult(intent, REQUEST_CODE_IMAGE);
+                    } catch (android.content.ActivityNotFoundException ex) {
+                        Toast.makeText(NoteEditActivity.this, "请安装文件管理器或图库应用", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }
+        });
+        builder.show();
+    }
+    
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        if (requestCode == REQUEST_CODE_PERMISSION) {
+            // 在虚拟机上，不管权限结果如何，都尝试显示图片选择器
+            // 由于某些虚拟机环境可能有权限问题，我们直接尝试操作
+            showImagePickerDialog();
+        }
+    }
+    
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_IMAGE && resultCode == RESULT_OK && data != null) {
+            Uri selectedImage = data.getData();
+            if (selectedImage != null) {
+                String imagePath = getImagePathFromUri(selectedImage);
+                
+                if (imagePath != null) {
+                    File imageFile = new File(imagePath);
+                    if (imageFile.exists()) {
+                        mWorkingNote.setWorkingImage(imagePath);
+                        saveNote();
+                        
+                        showImage(imagePath);
+                        Toast.makeText(this, R.string.insert_image_success, Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(this, R.string.file_not_exist, Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(this, R.string.image_path_error, Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                Toast.makeText(this, R.string.image_select_failed, Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+    
+    private String getImagePathFromUri(Uri uri) {
+        String imagePath = null;
+        
+        // 处理内容提供者类型URI
+        if ("content".equals(uri.getScheme())) {
+            String[] projection = {MediaStore.Images.Media.DATA};
+            Cursor cursor = getContentResolver().query(uri, projection, null, null, null);
+            
+            if (cursor != null && cursor.moveToFirst()) {
+                int columnIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+                imagePath = cursor.getString(columnIndex);
+                cursor.close();
+            }
+            
+            // 如果上面的方法失败，尝试直接从流中复制文件
+            if (imagePath == null) {
+                imagePath = copyFileFromUri(uri);
+            }
+        } 
+        // 处理文件类型URI
+        else if ("file".equals(uri.getScheme())) {
+            imagePath = uri.getPath();
+        }
+        // 处理document类型URI
+        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT 
+                 && "com.android.providers.media.documents".equals(uri.getAuthority())) {
+            try {
+                final String docId = android.provider.DocumentsContract.getDocumentId(uri);
+                final String[] split = docId.split(":");
+                final String type = split[0];
+                
+                Uri contentUri = null;
+                if ("image".equals(type)) {
+                    contentUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+                }
+                
+                if (contentUri != null) {
+                    final String selection = "_id=?";
+                    final String[] selectionArgs = new String[]{split[1]};
+                    String[] projection = {MediaStore.Images.Media.DATA};
+                              
+                    Cursor cursor = getContentResolver().query(contentUri, projection, selection, selectionArgs, null);
+                    if (cursor != null && cursor.moveToFirst()) {
+                        int columnIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+                        imagePath = cursor.getString(columnIndex);
+                        cursor.close();
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "通过DocumentsContract获取路径失败: " + e.getMessage());
+            }
+        
+            // 如果仍然失败，尝试复制文件
+            if (imagePath == null) {
+                imagePath = copyFileFromUri(uri);
+            }
+        }
+        // 其他所有情况，尝试复制文件
+        else {
+            imagePath = copyFileFromUri(uri);
+        }
+        
+        if (imagePath != null) {
+            Log.d(TAG, "获取到的图片路径: " + imagePath);
+        } else {
+            Log.e(TAG, "无法获取图片路径");
+        }
+        
+        return imagePath;
+    }
+    
+    // 从URI复制文件到本地缓存
+    private String copyFileFromUri(Uri uri) {
+        try {
+            File cacheDir = new File(getExternalCacheDir(), "images");
+            if (!cacheDir.exists()) {
+                cacheDir.mkdirs();
+            }
+            
+            String fileName = "img_" + System.currentTimeMillis() + ".jpg";
+            File targetFile = new File(cacheDir, fileName);
+            
+            java.io.InputStream input = getContentResolver().openInputStream(uri);
+            if (input == null) return null;
+            
+            java.io.OutputStream output = new java.io.FileOutputStream(targetFile);
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = input.read(buffer)) != -1) {
+                output.write(buffer, 0, bytesRead);
+            }
+            input.close();
+            output.close();
+            
+            return targetFile.getAbsolutePath();
+        } catch (Exception e) {
+            Log.e(TAG, "复制文件失败: " + e.getMessage());
+            return null;
+        }
+    }
+    
+    private void showImage(String imagePath) {
+        if (imagePath != null && !imagePath.isEmpty()) {
+            Bitmap bitmap = BitmapFactory.decodeFile(imagePath);
+            if (bitmap != null) {
+                mNoteImage.setImageBitmap(bitmap);
+                mNoteImage.setVisibility(View.VISIBLE);
+            } else {
+                mNoteImage.setVisibility(View.GONE);
+            }
+        } else {
+            mNoteImage.setVisibility(View.GONE);
+        }
     }
 }
