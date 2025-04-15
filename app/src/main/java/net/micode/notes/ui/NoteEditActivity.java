@@ -38,9 +38,11 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.preference.PreferenceManager;
 import android.provider.MediaStore;
+import android.text.Editable;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.text.format.DateUtils;
 import android.text.style.BackgroundColorSpan;
 import android.util.Log;
@@ -89,11 +91,9 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         NoteSettingChangedListener, OnTextViewChangeListener {
     private class HeadViewHolder {
         public TextView tvModified;
-
+        public TextView tvWordCountBar;
         public ImageView ivAlertIcon;
-
         public TextView tvAlertDate;
-
         public ImageView ibSetBgColor;
     }
 
@@ -170,6 +170,7 @@ public class NoteEditActivity extends Activity implements OnClickListener,
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         this.setContentView(R.layout.note_edit);
 
         if (savedInstanceState == null && !initActivityState(getIntent())) {
@@ -294,6 +295,8 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         } else {
             mNoteEditor.setText(getHighlightQueryResult(mWorkingNote.getContent(), mUserQuery));
             mNoteEditor.setSelection(mNoteEditor.getText().length());
+            // 直接更新字数统计
+            updateWordCount(mWorkingNote.getContent());
         }
         for (Integer id : sBgSelectorSelectionMap.keySet()) {
             findViewById(sBgSelectorSelectionMap.get(id)).setVisibility(View.GONE);
@@ -385,6 +388,17 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         mHeadViewPanel = findViewById(R.id.note_title);
         mNoteHeaderHolder = new HeadViewHolder();
         mNoteHeaderHolder.tvModified = (TextView) findViewById(R.id.tv_modified_date);
+        
+        // 初始化顶部字数统计条
+        mNoteHeaderHolder.tvWordCountBar = (TextView) findViewById(R.id.tv_word_count_bar);
+        if (mNoteHeaderHolder.tvWordCountBar != null) {
+            Log.d(TAG, "顶部字数统计条初始化成功");
+            // 初始设置为可见
+            mNoteHeaderHolder.tvWordCountBar.setVisibility(View.VISIBLE);
+        } else {
+            Log.e(TAG, "顶部字数统计条初始化失败: 未找到视图");
+        }
+        
         mNoteHeaderHolder.ivAlertIcon = (ImageView) findViewById(R.id.iv_alert_icon);
         mNoteHeaderHolder.tvAlertDate = (TextView) findViewById(R.id.tv_alert_date);
         mNoteHeaderHolder.ibSetBgColor = (ImageView) findViewById(R.id.btn_set_bg_color);
@@ -395,6 +409,39 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         mFontSizeSelector = findViewById(R.id.font_size_selector);
         
         mNoteImage = (ImageView) findViewById(R.id.note_image);
+
+        // 安全地添加文本变化监听器
+        if (mNoteEditor != null) {
+            mNoteEditor.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                }
+
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    try {
+                        // 直接调用updateWordCount方法更新字数
+                        Log.d(TAG, "文本变化，调用updateWordCount");
+                        updateWordCount(s.toString());
+                    } catch (Exception e) {
+                        Log.e(TAG, "文本变化时更新字数出错: " + e.getMessage());
+                    }
+                }
+
+                @Override
+                public void afterTextChanged(Editable s) {
+                    // 在文本变化后再次调用，确保更新
+                    try {
+                        if (s != null) {
+                            Log.d(TAG, "文本编辑后，再次调用updateWordCount");
+                            updateWordCount(s.toString());
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "文本编辑后更新字数出错: " + e.getMessage());
+                    }
+                }
+            });
+        }
 
         for (int id : sBgSelectorBtnsMap.keySet()) {
             ImageView iv = (ImageView) findViewById(id);
@@ -434,6 +481,8 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         } else {
             mNoteEditor.setText(getHighlightQueryResult(mWorkingNote.getContent(), mUserQuery));
             mNoteEditor.setSelection(mNoteEditor.getText().length());
+            // 直接更新字数统计
+            updateWordCount(mWorkingNote.getContent());
         }
     }
 
@@ -735,6 +784,13 @@ public class NoteEditActivity extends Activity implements OnClickListener,
 
         mNoteEditor.setVisibility(View.GONE);
         mEditTextList.setVisibility(View.VISIBLE);
+        
+        // 列表模式也更新字数统计
+        try {
+            updateWordCount(text);
+        } catch (Exception e) {
+            Log.e(TAG, "切换到列表模式时更新字数出错: " + e.getMessage());
+        }
     }
 
     private Spannable getHighlightQueryResult(String fullText, String userQuery) {
@@ -1001,75 +1057,88 @@ public class NoteEditActivity extends Activity implements OnClickListener,
             }
         }
     }
-    
+
     private String getImagePathFromUri(Uri uri) {
         String imagePath = null;
-        
-        // 处理内容提供者类型URI
+
+        // 处理content协议URI（现代Android文件选择常用类型）
         if ("content".equals(uri.getScheme())) {
+            // 构建MediaStore查询获取真实路径
             String[] projection = {MediaStore.Images.Media.DATA};
             Cursor cursor = getContentResolver().query(uri, projection, null, null, null);
-            
+
             if (cursor != null && cursor.moveToFirst()) {
-                int columnIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
-                imagePath = cursor.getString(columnIndex);
-                cursor.close();
+                try {
+                    int columnIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+                    imagePath = cursor.getString(columnIndex);
+                } finally {
+                    cursor.close(); // 确保游标始终关闭
+                }
             }
-            
-            // 如果上面的方法失败，尝试直接从流中复制文件
+
+            // 标准查询失败时使用备用复制方案
             if (imagePath == null) {
                 imagePath = copyFileFromUri(uri);
             }
-        } 
-        // 处理文件类型URI
-        else if ("file".equals(uri.getScheme())) {
-            imagePath = uri.getPath();
         }
-        // 处理document类型URI
-        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT 
-                 && "com.android.providers.media.documents".equals(uri.getAuthority())) {
+        // 处理传统文件协议URI
+        else if ("file".equals(uri.getScheme())) {
+            imagePath = uri.getPath(); // 直接提取物理路径
+        }
+        // 处理文档协议URI（Android 4.4+ DocumentsContract）
+        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT
+                && DocumentsContract.isDocumentUri(this, uri)) {
             try {
-                final String docId = android.provider.DocumentsContract.getDocumentId(uri);
-                final String[] split = docId.split(":");
-                final String type = split[0];
-                
+                // 解析文档ID格式（例："image:12345"）
+                String docId = DocumentsContract.getDocumentId(uri);
+                String[] split = docId.split(":");
+                String type = split[0];
+
+                // 构建对应媒体库的ContentUri
                 Uri contentUri = null;
                 if ("image".equals(type)) {
                     contentUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
                 }
-                
+                // 可扩展处理其他媒体类型（如video/audio）
+
                 if (contentUri != null) {
-                    final String selection = "_id=?";
-                    final String[] selectionArgs = new String[]{split[1]};
+                    // 构造精确查询条件
+                    String selection = "_id=?";
+                    String[] selectionArgs = new String[]{split[1]};
                     String[] projection = {MediaStore.Images.Media.DATA};
-                              
-                    Cursor cursor = getContentResolver().query(contentUri, projection, selection, selectionArgs, null);
+
+                    Cursor cursor = getContentResolver().query(
+                            contentUri, projection, selection, selectionArgs, null);
                     if (cursor != null && cursor.moveToFirst()) {
-                        int columnIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
-                        imagePath = cursor.getString(columnIndex);
-                        cursor.close();
+                        try {
+                            int columnIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+                            imagePath = cursor.getString(columnIndex);
+                        } finally {
+                            cursor.close();
+                        }
                     }
                 }
             } catch (Exception e) {
-                Log.e(TAG, "通过DocumentsContract获取路径失败: " + e.getMessage());
+                Log.e(TAG, "DocumentsContract解析失败: " + e.getMessage());
             }
-        
-            // 如果仍然失败，尝试复制文件
+
+            // 文档查询失败时降级到文件复制
             if (imagePath == null) {
                 imagePath = copyFileFromUri(uri);
             }
         }
-        // 其他所有情况，尝试复制文件
+        // 处理未知URI类型
         else {
-            imagePath = copyFileFromUri(uri);
+            imagePath = copyFileFromUri(uri); // 最终备用方案
         }
-        
+
+        // 记录路径获取结果
         if (imagePath != null) {
-            Log.d(TAG, "获取到的图片路径: " + imagePath);
+            Log.d(TAG, "成功解析图片路径: " + imagePath);
         } else {
-            Log.e(TAG, "无法获取图片路径");
+            Log.e(TAG, "路径解析失败，所有方案均未生效");
         }
-        
+
         return imagePath;
     }
     
@@ -1102,18 +1171,63 @@ public class NoteEditActivity extends Activity implements OnClickListener,
             return null;
         }
     }
-    
+
+    /**
+     * 根据图片路径加载并显示图片到视图
+     * 1. 检查路径有效性，无效则隐藏图片视图
+     * 2. 尝试解码图片文件为Bitmap
+     * 3. 解码成功则显示图片，失败则隐藏视图
+     *
+     * @param imagePath 图片文件路径，null或空时视为无效路径
+     */
     private void showImage(String imagePath) {
+        // 检查路径是否有效
         if (imagePath != null && !imagePath.isEmpty()) {
+            // 从文件系统解码位图
             Bitmap bitmap = BitmapFactory.decodeFile(imagePath);
+
             if (bitmap != null) {
+                // 解码成功：设置位图并显示视图
                 mNoteImage.setImageBitmap(bitmap);
                 mNoteImage.setVisibility(View.VISIBLE);
             } else {
+                // 解码失败：隐藏图片视图（避免显示破损图片）
                 mNoteImage.setVisibility(View.GONE);
             }
         } else {
+            // 无效路径：隐藏图片视图（当路径被清空时清除显示）
             mNoteImage.setVisibility(View.GONE);
+        }
+    }
+
+    private void updateWordCount(String text) {
+        // 增加调试日志
+        Log.d(TAG, "updateWordCount被调用");
+        
+        // 增加空值检查，避免崩溃
+        if (text == null) {
+            Log.e(TAG, "文本为空");
+            return;
+        }
+        
+        try {
+            // 移除所有空格、换行符和图片标记
+            String cleanText = text.replaceAll("\\s+", "").replaceAll("\\[图片\\]", "");
+            int count = cleanText.length();
+            String countText = count + "字";
+            Log.d(TAG, "更新字数统计: " + countText);
+            
+            // 更新原有的字数统计
+            if (mNoteHeaderHolder != null && mNoteHeaderHolder.tvWordCountBar != null) {
+                Log.d(TAG, "正在设置字数统计文本: " + countText);
+                mNoteHeaderHolder.tvWordCountBar.setText(countText);
+                mNoteHeaderHolder.tvWordCountBar.setVisibility(View.VISIBLE);
+            } else {
+                Log.e(TAG, "字数统计视图为空，无法更新");
+            }
+        } catch (Exception e) {
+            // 捕获任何可能的异常，防止应用崩溃
+            Log.e(TAG, "更新字数统计时出错: " + e.getMessage());
         }
     }
 }

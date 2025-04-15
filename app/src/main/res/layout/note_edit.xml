@@ -24,12 +24,18 @@
     <LinearLayout
         android:layout_width="fill_parent"
         android:layout_height="fill_parent"
-        android:orientation="vertical">
+        android:orientation="vertical"
+        android:paddingTop="24dp">
 
         <LinearLayout
             android:id="@+id/note_title"
             android:layout_width="fill_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
 
             <TextView
                 android:id="@+id/tv_modified_date"
@@ -37,8 +43,19 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_gravity="left|center_vertical"
-                android:layout_marginRight="8dip"
                 android:textAppearance="@style/TextAppearanceSecondaryItem" />
+
+            <TextView
+                android:id="@+id/tv_word_count_bar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_marginLeft="8dp"
+                android:layout_marginRight="8dp"
+                android:text="0字"
+                android:textColor="#FF000000"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
             <ImageView
                 android:id="@+id/iv_alert_icon"
@@ -130,11 +147,6 @@
                     </LinearLayout>
                 </LinearLayout>
             </ScrollView>
-
-            <ImageView
-                android:layout_width="fill_parent"
-                android:layout_height="7dip"
-                android:background="@drawable/bg_color_btn_mask" />
         </LinearLayout>
     </LinearLayout>
 

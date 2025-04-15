@@ -138,6 +138,7 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         setContentView(R.layout.note_list);
         initResources();
 
