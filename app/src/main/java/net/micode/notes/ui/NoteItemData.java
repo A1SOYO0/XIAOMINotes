@@ -26,7 +26,7 @@ import net.micode.notes.data.Notes.NoteColumns;
 import net.micode.notes.tool.DataUtils;
 
 
-public class NoteItemData {
+public class NoteItemData {//
     static final String [] PROJECTION = new String [] {
         NoteColumns.ID,
         NoteColumns.ALERTED_DATE,
