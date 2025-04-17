@@ -514,29 +514,51 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         setResult(RESULT_OK, intent);
     }
 
+    /**
+     * 处理视图点击事件
+     * 负责处理:
+     * 1. 背景颜色选择按钮点击 - 显示颜色选择器面板
+     * 2. 颜色选择器内具体颜色的选择 - 更改笔记背景颜色并隐藏选择器
+     * 3. 字体大小选择 - 更改文本大小并应用到笔记内容
+     * @param v 被点击的视图对象
+     */
     public void onClick(View v) {
         int id = v.getId();
         if (id == R.id.btn_set_bg_color) {
+            // 处理背景颜色按钮点击，显示颜色选择器面板
             mNoteBgColorSelector.setVisibility(View.VISIBLE);
             findViewById(sBgSelectorSelectionMap.get(mWorkingNote.getBgColorId())).setVisibility(
                     View.VISIBLE);
         } else if (sBgSelectorBtnsMap.containsKey(id)) {
+            // 处理颜色选择器中的颜色选择
+            // 首先隐藏之前选中的颜色指示器
             findViewById(sBgSelectorSelectionMap.get(mWorkingNote.getBgColorId())).setVisibility(
                     View.GONE);
+            // 设置新的背景颜色
             mWorkingNote.setBgColorId(sBgSelectorBtnsMap.get(id));
+            // 隐藏颜色选择器面板
             mNoteBgColorSelector.setVisibility(View.GONE);
         } else if (sFontSizeBtnsMap.containsKey(id)) {
+            // 处理字体大小选择
+            // 首先隐藏之前选中的字体大小指示器
             findViewById(sFontSelectorSelectionMap.get(mFontSizeId)).setVisibility(View.GONE);
+            // 设置新的字体大小
             mFontSizeId = sFontSizeBtnsMap.get(id);
+            // 保存字体大小设置到SharedPreferences
             mSharedPrefs.edit().putInt(PREFERENCE_FONT_SIZE, mFontSizeId).commit();
+            // 显示当前选中的字体大小指示器
             findViewById(sFontSelectorSelectionMap.get(mFontSizeId)).setVisibility(View.VISIBLE);
+            // 根据笔记模式应用字体大小
             if (mWorkingNote.getCheckListMode() == TextNote.MODE_CHECK_LIST) {
+                // 列表模式需要重新加载整个列表
                 getWorkingText();
                 switchToListMode(mWorkingNote.getContent());
             } else {
+                // 普通文本模式直接设置文本外观
                 mNoteEditor.setTextAppearance(this,
                         TextAppearanceResources.getTexAppearanceResource(mFontSizeId));
             }
+            // 隐藏字体大小选择器面板
             mFontSizeSelector.setVisibility(View.GONE);
         }
     }
@@ -1030,29 +1052,51 @@ public class NoteEditActivity extends Activity implements OnClickListener,
         }
     }
     
+    /**
+     * 处理从其他Activity返回的结果
+     * 主要负责处理图片选择的结果：
+     * 1. 验证返回的数据是否有效
+     * 2. 从返回的URI中提取图片路径
+     * 3. 验证图片文件是否存在
+     * 4. 将图片添加到笔记并保存
+     * 5. 显示图片并向用户提供操作反馈
+     * @param requestCode 请求码，用于识别请求类型
+     * @param resultCode 结果码，表示操作是否成功
+     * @param data 返回的数据，包含选择的图片URI
+     */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_CODE_IMAGE && resultCode == RESULT_OK && data != null) {
+            // 处理图片选择结果
             Uri selectedImage = data.getData();
             if (selectedImage != null) {
+                // 从URI获取图片的实际文件路径
                 String imagePath = getImagePathFromUri(selectedImage);
                 
                 if (imagePath != null) {
+                    // 验证图片文件是否存在
                     File imageFile = new File(imagePath);
                     if (imageFile.exists()) {
+                        // 设置笔记的图片路径
                         mWorkingNote.setWorkingImage(imagePath);
+                        // 保存笔记到数据库
                         saveNote();
                         
+                        // 显示图片到界面上
                         showImage(imagePath);
+                        // 提示用户图片插入成功
                         Toast.makeText(this, R.string.insert_image_success, Toast.LENGTH_SHORT).show();
                     } else {
+                        // 图片文件不存在，提示用户
                         Toast.makeText(this, R.string.file_not_exist, Toast.LENGTH_SHORT).show();
                     }
                 } else {
+                    // 无法获取图片路径，提示用户
                     Toast.makeText(this, R.string.image_path_error, Toast.LENGTH_SHORT).show();
                 }
             } else {
+                // 选择的图片URI为空，提示用户
                 Toast.makeText(this, R.string.image_select_failed, Toast.LENGTH_SHORT).show();
             }
         }
