@@ -36,7 +36,7 @@ import org.json.JSONObject;
 
 
 public class SqlData {
-    private static final String TAG = SqlData.class.getSimpleName();
+    private static final String TAG = SqlData.class.getSimpleName();//
 
     private static final int INVALID_ID = -99999;
 
