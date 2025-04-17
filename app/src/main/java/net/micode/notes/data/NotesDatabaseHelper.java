@@ -27,7 +27,7 @@ import net.micode.notes.data.Notes.DataConstants;
 import net.micode.notes.data.Notes.NoteColumns;
 
 
-public class NotesDatabaseHelper extends SQLiteOpenHelper {
+public class NotesDatabaseHelper extends SQLiteOpenHelper {//
     private static final String DB_NAME = "note.db";
 
     private static final int DB_VERSION = 4;
