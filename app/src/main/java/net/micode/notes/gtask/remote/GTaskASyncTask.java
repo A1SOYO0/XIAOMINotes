@@ -29,7 +29,7 @@ import net.micode.notes.ui.NotesListActivity;
 import net.micode.notes.ui.NotesPreferenceActivity;
 
 
-public class GTaskASyncTask extends AsyncTask<Void, String, Integer> {
+public class GTaskASyncTask extends AsyncTask<Void, String, Integer> {//
 
     private static int GTASK_SYNC_NOTIFICATION_ID = 5234235;
 
