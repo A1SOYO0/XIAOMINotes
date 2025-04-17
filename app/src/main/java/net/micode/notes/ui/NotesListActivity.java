@@ -158,29 +158,48 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
         }
     }
 
+    /**
+     * 为首次使用应用的用户创建应用介绍笔记
+     * 工作流程：
+     * 1. 检查是否已经添加过介绍笔记（通过SharedPreferences标记）
+     * 2. 如果没有添加过，从raw资源文件夹读取介绍文本
+     * 3. 创建一个新的笔记，设置介绍文本内容
+     * 4. 保存笔记并更新SharedPreferences标记，避免再次创建
+     * 该方法在应用首次启动时执行，为用户提供应用使用指南
+     */
     private void setAppInfoFromRawRes() {
+        // 获取SharedPreferences，用于检查是否已添加过介绍笔记
         SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
+        // 如果介绍笔记尚未添加（首次使用应用）
         if (!sp.getBoolean(PREFERENCE_ADD_INTRODUCTION, false)) {
+            // 创建StringBuilder用于存储介绍内容
             StringBuilder sb = new StringBuilder();
             InputStream in = null;
             try {
+                 // 从raw资源文件夹中打开介绍文件
                  in = getResources().openRawResource(R.raw.introduction);
                 if (in != null) {
+                    // 创建输入流读取器和缓冲读取器
                     InputStreamReader isr = new InputStreamReader(in);
                     BufferedReader br = new BufferedReader(isr);
+                    // 创建字符缓冲区
                     char [] buf = new char[1024];
                     int len = 0;
+                    // 循环读取文件内容并添加到StringBuilder
                     while ((len = br.read(buf)) > 0) {
                         sb.append(buf, 0, len);
                     }
                 } else {
+                    // 读取失败记录日志并退出
                     Log.e(TAG, "Read introduction file error");
                     return;
                 }
             } catch (IOException e) {
+                // 发生IO异常时记录日志并退出
                 e.printStackTrace();
                 return;
             } finally {
+                // 确保输入流正确关闭
                 if(in != null) {
                     try {
                         in.close();
@@ -191,13 +210,18 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
                 }
             }
 
+            // 创建一个空的笔记对象，设置在根文件夹中，使用红色背景
             WorkingNote note = WorkingNote.createEmptyNote(this, Notes.ID_ROOT_FOLDER,
                     AppWidgetManager.INVALID_APPWIDGET_ID, Notes.TYPE_WIDGET_INVALIDE,
                     ResourceParser.RED);
+            // 设置笔记内容为刚读取的介绍文本
             note.setWorkingText(sb.toString());
+            // 保存笔记到数据库
             if (note.saveNote()) {
+                // 保存成功后更新SharedPreferences标记，防止下次再创建
                 sp.edit().putBoolean(PREFERENCE_ADD_INTRODUCTION, true).commit();
             } else {
+                // 保存失败记录日志
                 Log.e(TAG, "Save introduction note error");
                 return;
             }
@@ -215,25 +239,48 @@ public class NotesListActivity extends Activity implements OnClickListener, OnIt
         super.onResume();
     }
 
+    /**
+     * 初始化应用所需的各种资源和UI组件
+     * 1. 初始化数据访问相关对象（ContentResolver和QueryHandler）
+     * 2. 设置列表视图及其适配器
+     * 3. 配置新建笔记按钮和相关交互
+     * 4. 初始化UI状态变量
+     * 5. 设置多选模式回调
+     */
     private void initResources() {
+        // 获取ContentResolver用于数据库操作
         mContentResolver = this.getContentResolver();
+        // 创建异步查询处理器
         mBackgroundQueryHandler = new BackgroundQueryHandler(this.getContentResolver());
+        // 设置当前文件夹为根文件夹
         mCurrentFolderId = Notes.ID_ROOT_FOLDER;
+        // 初始化笔记列表视图
         mNotesListView = (ListView) findViewById(R.id.notes_list);
+        // 添加列表底部视图（用于美观和滚动效果）
         mNotesListView.addFooterView(LayoutInflater.from(this).inflate(R.layout.note_list_footer, null),
                 null, false);
+        // 设置列表项点击监听器
         mNotesListView.setOnItemClickListener(new OnListItemClickListener());
+        // 设置列表项长按监听器
         mNotesListView.setOnItemLongClickListener(this);
+        // 创建并设置列表适配器
         mNotesListAdapter = new NotesListAdapter(this);
         mNotesListView.setAdapter(mNotesListAdapter);
+        
+        // 初始化新建笔记按钮
         mAddNewNote = (Button) findViewById(R.id.btn_new_note);
+        // 设置点击和触摸事件监听器
         mAddNewNote.setOnClickListener(this);
         mAddNewNote.setOnTouchListener(new NewNoteOnTouchListener());
+        // 初始化触摸事件分发变量
         mDispatch = false;
         mDispatchY = 0;
         mOriginY = 0;
+        // 初始化标题栏
         mTitleBar = (TextView) findViewById(R.id.tv_title_bar);
+        // 设置初始状态为笔记列表
         mState = ListEditState.NOTE_LIST;
+        // 创建多选模式回调
         mModeCallBack = new ModeCallback();
     }
 
