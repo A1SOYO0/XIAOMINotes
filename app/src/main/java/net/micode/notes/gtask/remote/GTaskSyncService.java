@@ -42,6 +42,7 @@ public class GTaskSyncService extends Service {
 
     private static String mSyncProgress = "";
 
+    //ddd
     private void startSync() {
         if (mSyncTask == null) {
             mSyncTask = new GTaskASyncTask(this, new GTaskASyncTask.OnCompleteListener() {
