@@ -30,7 +30,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 
 
-public class TaskList extends Node {
+public class TaskList extends Node {//
     private static final String TAG = TaskList.class.getSimpleName();
 
     private int mIndex;
